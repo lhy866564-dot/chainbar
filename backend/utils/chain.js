@@ -126,6 +126,21 @@ async function readTrade(orderId) {
   };
 }
 
+/**
+ * 演示转账：从后端托管账户向指定地址转测试币
+ * 生产环境应由用户自己的钱包签名，这里只为本地测试链提供可跑通的转账闭环
+ */
+async function transfer(to, amountEth) {
+  const c = requireChain();
+  if (!ethers.utils.isAddress(to)) throw httpError(400, '收款地址格式不正确');
+  const value = ethers.utils.parseEther(String(amountEth));
+  if (value.lte(0)) throw httpError(400, '转账金额需大于 0');
+
+  const tx = await c.wallet.sendTransaction({ to, value });
+  const receipt = await tx.wait();
+  return receipt.transactionHash;
+}
+
 module.exports = {
   chainStatus,
   balanceOf,
@@ -135,4 +150,5 @@ module.exports = {
   openDispute,
   resolveDispute,
   readTrade,
+  transfer,
 };

@@ -7,9 +7,12 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 
 const authRoutes = require('./routes/auth').router;
-const barRoutes = require('./routes/bars');
+const forumRoutes = require('./routes/forum');
+const goodsRoutes = require('./routes/goods');
+const friendRoutes = require('./routes/friends');
 const chatRoutes = require('./routes/chat');
-const tradeRoutes = require('./routes/trades');
+const transferRoutes = require('./routes/transfers');
+const feedbackRoutes = require('./routes/feedback');
 const { initSocket } = require('./socket');
 
 const app = express();
@@ -22,15 +25,18 @@ app.use(cors(origins.length ? { origin: origins } : {}));
 app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/auth', authRoutes);
-app.use('/api', barRoutes);
+app.use('/api', forumRoutes);
+app.use('/api', goodsRoutes);
+app.use('/api', friendRoutes);
 app.use('/api', chatRoutes);
-app.use('/api', tradeRoutes);
+app.use('/api', transferRoutes);
+app.use('/api', feedbackRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'chainbar', time: new Date().toISOString() });
 });
 
-// 前端静态页
+// 前端静态页（无构建步骤）
 const publicDir = path.join(__dirname, '..', 'frontend');
 app.use(express.static(publicDir));
 app.get('*', (req, res, next) => {

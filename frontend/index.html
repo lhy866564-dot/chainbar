@@ -3,33 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>链吧 · 社区与担保交易</title>
+  <title>链吧 · 好物 / 论坛 / 好友 / 设置</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand" data-nav="plaza">
+    <div class="brand" data-nav="goods">
       <span class="logo">链</span>
       <div>
         <h1>链吧 ChainBar</h1>
-        <p>聊天 · 论坛 · 一对一直购（链上托管）</p>
+        <p>好物 · 论坛 · 好友</p>
       </div>
     </div>
     <nav class="tabs">
-      <button data-nav="plaza" class="tab">广场</button>
-      <button data-nav="bar" class="tab">当前吧</button>
-      <button data-nav="messages" class="tab">消息</button>
-      <button data-nav="trades" class="tab">交易</button>
-      <button data-nav="me" class="tab">我的</button>
+      <button data-nav="goods" class="tab">好物</button>
+      <button data-nav="forum" class="tab">论坛</button>
+      <button data-nav="friends" class="tab">好友</button>
+      <button data-nav="settings" class="tab">设置</button>
     </nav>
     <div class="userbox" id="userbox"></div>
   </header>
-
-  <aside class="sidebar">
-    <h2>吧列表</h2>
-    <div id="barList" class="bar-list"></div>
-    <div class="chain-badge" id="chainBadge">链上状态检测中…</div>
-  </aside>
 
   <main id="view" class="view"></main>
 

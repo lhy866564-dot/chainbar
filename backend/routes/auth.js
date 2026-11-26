@@ -103,4 +103,21 @@ router.put(
   })
 );
 
+/** 修改密码 */
+router.put(
+  '/password',
+  authenticateToken,
+  asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body || {};
+    if (!oldPassword || !newPassword) throw httpError(400, '旧密码和新密码都不能为空');
+    if (String(newPassword).length < 6) throw httpError(400, '新密码至少 6 位');
+
+    const user = await queryOne('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+    if (!(await bcrypt.compare(String(oldPassword), user.password_hash))) throw httpError(400, '旧密码不正确');
+
+    await query('UPDATE users SET password_hash = ? WHERE id = ?', [await bcrypt.hash(String(newPassword), 10), req.user.id]);
+    res.json({ ok: true });
+  })
+);
+
 module.exports = { router, publicUser };

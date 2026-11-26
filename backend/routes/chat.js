@@ -5,28 +5,28 @@ const chatService = require('../services/chatService');
 
 const router = express.Router();
 
-/** 吧内群聊历史（REST 兜底，实时收发走 Socket.IO） */
+/* ============ 论坛大厅（公共聊天室） ============ */
+
 router.get(
-  '/chat/bar/:barId/messages',
+  '/chat/lobby/messages',
   authenticateToken,
   asyncHandler(async (req, res) => {
-    const limit = Math.min(100, Number(req.query.limit || 50));
-    res.json({ messages: await chatService.listBarMessages(Number(req.params.barId), limit) });
+    res.json({ messages: await chatService.listLobbyMessages(Math.min(100, Number(req.query.limit || 50))) });
   })
 );
 
-/** 发群聊消息（无 socket 时的 REST 方式，同样会广播） */
 router.post(
-  '/chat/bar/:barId/messages',
+  '/chat/lobby/messages',
   authenticateToken,
   asyncHandler(async (req, res) => {
-    const msg = await chatService.saveBarMessage(Number(req.params.barId), req.user.id, req.body?.content);
-    req.app.get('io').to(`bar:${msg.bar_id}`).emit('chat:new', msg);
+    const msg = await chatService.saveLobbyMessage(req.user.id, req.body?.content);
+    req.app.get('io').to('lobby').emit('lobby:new', msg);
     res.status(201).json(msg);
   })
 );
 
-/** 私聊历史，同时把对方消息标记已读 */
+/* ============ 一对一私聊（好友之间） ============ */
+
 router.get(
   '/chat/dm/:peerId',
   authenticateToken,
@@ -37,12 +37,15 @@ router.get(
   })
 );
 
-/** 发私聊（REST 方式） */
 router.post(
   '/chat/dm/:peerId',
   authenticateToken,
   asyncHandler(async (req, res) => {
-    const msg = await chatService.saveDirectMessage(req.user.id, Number(req.params.peerId), req.body?.content);
+    const msg = await chatService.saveDirectMessage(req.user.id, Number(req.params.peerId), {
+      content: req.body?.content,
+      msgType: req.body?.msgType,
+      payload: req.body?.payload,
+    });
     const io = req.app.get('io');
     io.to(`user:${msg.receiver_id}`).emit('dm:new', msg);
     io.to(`user:${msg.sender_id}`).emit('dm:new', msg);
@@ -50,7 +53,6 @@ router.post(
   })
 );
 
-/** 会话列表 */
 router.get(
   '/chat/conversations',
   authenticateToken,

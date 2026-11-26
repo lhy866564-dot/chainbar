@@ -3,7 +3,7 @@ const { io } = require('socket.io-client');
 const { pool } = require('../config/database');
 
 /**
- * 实时通道测试：两个客户端连同一个吧，验证群聊广播与私聊定向推送
+ * 实时通道测试：论坛大厅广播 + 好友私聊定向 + 频道隔离
  * 运行：node scripts/socket-test.js（需服务已启动）
  */
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:5100';
@@ -14,14 +14,13 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
 };
 
-async function register(name) {
-  const res = await fetch(`${BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: name, password: '123456', nickname: name }),
+async function call(path, { method = 'GET', body, token } = {}) {
+  const res = await fetch(`${BASE}/api${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await res.json();
-  return data;
+  return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 
 function connect(token) {
@@ -33,45 +32,58 @@ function connect(token) {
 }
 
 (async () => {
-  const a = await register(`ioA${stamp}`);
-  const b = await register(`ioB${stamp}`);
+  const a = (await call('/auth/register', { method: 'POST', body: { username: `ioA${stamp}`, password: '123456', nickname: `ioA${stamp}` } })).data;
+  const b = (await call('/auth/register', { method: 'POST', body: { username: `ioB${stamp}`, password: '123456', nickname: `ioB${stamp}` } })).data;
+  const c = (await call('/auth/register', { method: 'POST', body: { username: `ioC${stamp}`, password: '123456', nickname: `ioC${stamp}` } })).data;
 
   const sa = await connect(a.token);
   const sb = await connect(b.token);
-  check('两个客户端凭令牌连接成功', sa.connected && sb.connected);
+  check('两个客户端连接成功', sa.connected && sb.connected);
 
-  const bars = await (await fetch(`${BASE}/api/bars`)).json();
-  const barId = bars.bars[0].id;
-
-  const receivedByB = new Promise((resolve) => sb.on('chat:new', resolve));
-  sa.emit('bar:join', barId);
-  sb.emit('bar:join', barId);
+  /* ---- 大厅广播 ---- */
+  const lobbyGot = new Promise((r) => sb.on('lobby:new', r));
+  sa.emit('lobby:join');
+  sb.emit('lobby:join');
   await new Promise((r) => setTimeout(r, 300));
 
-  const ackOk = await new Promise((resolve) => {
-    sa.emit('chat:send', { barId, content: `socket 群聊 ${stamp}` }, (res) => resolve(res));
-  });
-  check('发送群聊拿到 ack', ackOk.ok === true);
+  const ack = await new Promise((resolve) => sa.emit('lobby:send', { content: `大厅广播 ${stamp}` }, resolve));
+  check('大厅发送拿到 ack', ack.ok === true);
 
-  const msg = await Promise.race([receivedByB, new Promise((r) => setTimeout(() => r(null), 3000))]);
-  check('同吧另一端实时收到群聊', msg && msg.content === `socket 群聊 ${stamp}`, msg ? `来自 ${msg.nickname}` : '超时');
+  const lobbyMsg = await Promise.race([lobbyGot, new Promise((r) => setTimeout(() => r(null), 3000))]);
+  check('同频道另一端实时收到', lobbyMsg && lobbyMsg.content === `大厅广播 ${stamp}`, lobbyMsg ? `来自 ${lobbyMsg.nickname}` : '超时');
 
-  const dmReceived = new Promise((resolve) => sb.on('dm:new', resolve));
-  await new Promise((resolve) => {
-    sa.emit('dm:send', { toUserId: b.user.id, content: `socket 私聊 ${stamp}` }, (res) => resolve(res));
-  });
-  const dm = await Promise.race([dmReceived, new Promise((r) => setTimeout(() => r(null), 3000))]);
-  check('对方定向收到私聊', dm && dm.content === `socket 私聊 ${stamp}`);
-
-  // 未加入吧的第三方不应收到群聊
-  const c = await register(`ioC${stamp}`);
   const sc = await connect(c.token);
-  let leaked = false;
-  sc.on('chat:new', () => { leaked = true; });
+  let cGotLobby = false;
+  sc.on('lobby:new', () => { cGotLobby = true; });
   await new Promise((r) => setTimeout(r, 200));
-  await new Promise((resolve) => sa.emit('chat:send', { barId, content: 'third check' }, resolve));
+  await new Promise((resolve) => sa.emit('lobby:send', { content: `第三端检查 ${stamp}` }, resolve));
   await new Promise((r) => setTimeout(r, 500));
-  check('未加入频道的客户端收不到群聊', leaked === false);
+  check('未加入大厅的客户端收不到', cGotLobby === false);
+
+  /* ---- 好友私聊 ---- */
+  await call('/friends/request', { method: 'POST', token: a.token, body: { userId: b.user.id } });
+  const reqList = await call('/friends/requests', { token: b.token });
+  const reqId = reqList.data.incoming[0].id;
+  await call(`/friends/requests/${reqId}/accept`, { method: 'POST', token: b.token });
+
+  const dmGot = new Promise((r) => sb.on('dm:new', r));
+  const dmAck = await new Promise((resolve) => sa.emit('dm:send', { toUserId: b.user.id, content: `私聊实时 ${stamp}` }, resolve));
+  check('私聊发送拿到 ack', dmAck.ok === true);
+
+  const dm = await Promise.race([dmGot, new Promise((r) => setTimeout(() => r(null), 3000))]);
+  check('对方定向收到私聊', dm && dm.content === `私聊实时 ${stamp}`);
+
+  // 分享卡片同样走私聊通道
+  const shareGot = new Promise((r) => sb.on('dm:new', r));
+  const shareAck = await new Promise((resolve) =>
+    sa.emit('dm:send', { toUserId: b.user.id, msgType: 'share', share: { kind: 'thread', id: 1, title: '分享测试帖', extra: '技术' } }, resolve)
+  );
+  const shareMsg = await Promise.race([shareGot, new Promise((r) => setTimeout(() => r(null), 3000))]);
+  check('分享卡片走私聊通道', shareAck.ok === true && shareMsg && shareMsg.msg_type === 'share');
+
+  // 非好友不能私聊
+  const blocked = await new Promise((resolve) => sa.emit('dm:send', { toUserId: c.user.id, content: '不该成功' }, resolve));
+  check('非好友私聊被 socket 拒绝', blocked.ok === false, blocked.message);
 
   sa.disconnect();
   sb.disconnect();
