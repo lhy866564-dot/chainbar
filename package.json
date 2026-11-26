@@ -1,0 +1,10 @@
+{
+  "name": "chainbar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "链吧 ChainBar — 好物 / 论坛 / 好友 / 设置 四模块社区与链上担保交易",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "app": "node scripts/start.js"
+  }
+}
