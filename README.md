@@ -161,7 +161,12 @@ chainbar/
 
 ## 二、克隆到本地后的使用方法
 
-**最省事的方式（Windows）**：把 `backend/db.env` 和 `backend/.env` 按第 1、2 步填好、MySQL 起着，然后双击仓库根目录的 `start.bat`（或根目录执行 `npm start`）。脚本会自动完成：缺依赖就装 → 本地链没跑就用 Ganache 拉起 8545 → 合约地址上没有代码就自动部署一次并把地址写回 `backend/.env` → 启动后端。页面就是 <http://localhost:5100>，前端由后端静态托管，不需要另开进程。按 Ctrl+C 停止时，脚本会连它自己拉起的链一起关掉；如果链是你在别的窗口起的，则保持不动。
+**最省事的方式（Windows）**：这个仓库不带 `node_modules`，依赖都写在 `backend/package.json` 与 `blockchain/package.json` 里。先把 `backend/db.env` 和 `backend/.env` 按第 1、2 步填好、MySQL 起着，然后：
+
+1. 装依赖（只需一次）：根目录 `npm run install:all`，或分别在 `backend`、`blockchain` 里 `npm install`
+2. 双击根目录的 `start.bat`（或 `npm start`）
+
+启动脚本会先按 `package.json` 逐个核对依赖，缺哪个就直接把名字列出来，不会闷头报 `Cannot find module`；依赖齐全后再自动完成：本地链没跑就用 Ganache 拉起 8545 → 合约地址上没有代码就自动部署一次并把地址写回 `backend/.env` → 启动后端。页面就是 <http://localhost:5100>，前端由后端静态托管，不需要另开进程。按 Ctrl+C 停止时，脚本会连它自己拉起的链一起关掉；如果链是你在别的窗口起的，则保持不动。想让脚本代装依赖，用 `npm start -- --install`。
 
 下面是从零开始的手动步骤，想弄清楚每一步在做什么，按顺序执行即可。需要 Node.js 18+、MySQL 8、Git。
 

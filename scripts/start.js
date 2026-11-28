@@ -99,10 +99,50 @@ async function waitUntil(fn, timeoutMs, interval = 800) {
   return false;
 }
 
-function ensureDeps(name, dir) {
-  if (fs.existsSync(path.join(dir, 'node_modules'))) return;
-  log(`📦 ${name} 缺依赖，执行 npm install（只需一次）...`, 'yellow');
+/**
+ * 按 package.json 的声明，逐个检查 node_modules 里到底缺了哪些包
+ * 支持带作用域的包名（@scope/name）
+ */
+function missingDeps(dir) {
+  const pkgPath = path.join(dir, 'package.json');
+  if (!fs.existsSync(pkgPath)) return [];
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const declared = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+  return Object.keys(declared).filter((name) => {
+    const target = path.join(dir, 'node_modules', ...name.split('/'));
+    return !fs.existsSync(target);
+  });
+}
+
+/**
+ * 检查某个子项目的依赖；缺了就按名字列出来，并给出该在哪装。
+ * 传 --install 时改为直接执行 npm install（方便第一次上手）。
+ */
+function checkDeps(label, dir, autoInstall) {
+  const missing = missingDeps(dir);
+  if (!missing.length) {
+    log(`✅ ${label} 依赖齐全`, 'green');
+    return true;
+  }
+
+  log(`❌ ${label} 缺少 ${missing.length} 个依赖：`, 'red');
+  log(`   ${missing.join(', ')}`, 'yellow');
+
+  if (!autoInstall) {
+    const rel = path.relative(projectRoot, dir) || '.';
+    log(`👉 在该目录执行 npm install：cd ${rel} && npm install`, 'yellow');
+    return false;
+  }
+
+  log(`📦 正在安装 ${label} 的依赖（只需一次）...`, 'yellow');
   execSync('npm install', { cwd: dir, stdio: 'inherit', shell: true });
+  const stillMissing = missingDeps(dir);
+  if (stillMissing.length) {
+    log(`❌ 安装后仍缺：${stillMissing.join(', ')}`, 'red');
+    return false;
+  }
+  log(`✅ ${label} 依赖安装完成`, 'green');
+  return true;
 }
 
 /* ---------------- 子进程 ---------------- */
@@ -157,13 +197,20 @@ ${c.cyan}========================================
 ========================================${c.reset}
 `);
 
+  const autoInstall = process.argv.includes('--install');
+  const backendOk = checkDeps('后端', backendDir, autoInstall);
+  const chainDepsOk = checkDeps('区块链脚本', blockchainDir, autoInstall);
+  if (!backendOk || !chainDepsOk) {
+    log('\n依赖没装齐，先装再重跑：', 'red');
+    log('   一次性安装：npm run install:all（在仓库根目录）', 'green');
+    log('   或让本脚本代装：npm start -- --install', 'green');
+    process.exit(1);
+  }
+
   if (!fs.existsSync(ENV_PATH)) {
     log('❌ 缺少 backend/.env。先复制模板：copy backend\\.env.example backend\\.env，再按本机情况改。', 'red');
     process.exit(1);
   }
-
-  ensureDeps('后端', backendDir);
-  ensureDeps('区块链脚本', blockchainDir);
 
   const port = Number(readEnv('PORT', '5100'));
   const rpcUrl = readEnv('RPC_URL', 'http://127.0.0.1:8545');
