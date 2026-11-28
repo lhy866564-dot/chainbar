@@ -161,7 +161,7 @@ chainbar/
 
 ## 二、克隆到本地后的使用方法
 
-**最省事的方式（Windows）**：这个仓库不带 `node_modules`，依赖都写在 `backend/package.json` 与 `blockchain/package.json` 里。先把 `backend/db.env` 和 `backend/.env` 按第 1、2 步填好、MySQL 起着，然后：
+**最省事的方式（Windows）**：这个包不带 `node_modules`，依赖都写在 `backend/package.json` 与 `blockchain/package.json` 里。先把 `backend/db.env`、`backend/.env`、`blockchain/.env` 按第 1、2、5 步填好、MySQL 起着，然后：
 
 1. 装依赖（只需一次）：根目录 `npm run install:all`，或分别在 `backend`、`blockchain` 里 `npm install`
 2. 双击根目录的 `start.bat`（或 `npm start`）

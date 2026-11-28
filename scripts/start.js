@@ -174,17 +174,17 @@ function killTree(pid) {
   } catch (_) { /* 已退出 */ }
 }
 
-function stopAll() {
+function stopAll(code = 0) {
   if (stopping) return;
   stopping = true;
   log('\n⏹️  正在停止...', 'yellow');
   children.forEach(({ child }) => child.pid && killTree(child.pid));
   log('✅ 已停止', 'green');
-  process.exit(0);
+  process.exit(code);
 }
 
-process.on('SIGINT', stopAll);
-process.on('SIGTERM', stopAll);
+process.on('SIGINT', () => stopAll());
+process.on('SIGTERM', () => stopAll());
 process.on('exit', () => { if (!stopping) children.forEach(({ child }) => child.pid && killTree(child.pid)); });
 
 /* ---------------- 主流程 ---------------- */
@@ -249,8 +249,20 @@ ${c.cyan}========================================
   log(`\n📜 检查托管合约 ${contract || '(未配置)'} ...`, 'yellow');
   const code = contract ? await rpc(rpcUrl, 'eth_getCode', [contract, 'latest']).catch(() => '0x') : '0x';
   if (!code || code === '0x') {
+    const chainEnv = path.join(blockchainDir, '.env');
+    if (!fs.existsSync(chainEnv)) {
+      log('❌ 缺少 blockchain/.env —— 自动部署合约要用它里面的 PRIVATE_KEY。', 'red');
+      log('   先复制模板：copy blockchain\\.env.example blockchain\\.env', 'yellow');
+      log('   再把 PRIVATE_KEY 填成 Ganache 第一个账户的私钥（--wallet.deterministic 下是固定的）。', 'yellow');
+      stopAll(1);
+    }
     log('合约地址上没有代码（新链或链被重置），自动部署一次...', 'yellow');
-    execSync('node deploy.js', { cwd: blockchainDir, stdio: 'inherit' });
+    try {
+      execSync('node deploy.js', { cwd: blockchainDir, stdio: 'inherit' });
+    } catch (err) {
+      log('❌ 部署失败，看上面区块链脚本的报错。常见原因：blockchain/.env 的 PRIVATE_KEY 不对、RPC_URL 指错、合约还没编译。', 'red');
+      stopAll(1);
+    }
     const deployed = JSON.parse(fs.readFileSync(path.join(blockchainDir, 'deployed.json'), 'utf8'));
     contract = deployed.address;
     patchEnv('ESCROW_CONTRACT', contract);
